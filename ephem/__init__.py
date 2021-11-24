@@ -7,7 +7,7 @@ import re
 from datetime import datetime as _datetime
 from datetime import timedelta as _timedelta
 from datetime import tzinfo as _tzinfo
-from math import pi
+from math import acos, cos, pi, sin
 from time import localtime as _localtime
 
 __version__ = '4.1'
@@ -23,6 +23,7 @@ _libastro._scansexa_split = re.compile(r'''
 
 # Various constants.
 
+tau = 6.283185307179586476925287
 twopi = pi * 2.
 halfpi = pi / 2.
 quarterpi = pi / 4.
@@ -516,12 +517,69 @@ class Observer(_libastro.Observer):
     @describe_riset_search
     def next_rising(self, body, start=None, use_center=False):
         """Search for the given body's next rising"""
+        if self.pressure == 0.0 and use_center:
+            return self._replacement(body, start)
         return self._riset_helper(body, start, use_center, True, False)
+
+    def _replacement(self, body, start):
+        original_date = self.date
+        try:
+            def print(*args): return
+            if start is not None:
+                self.date = start
+            start = self.date
+            print(self.date)
+            body.compute(self)
+            target_alt = self.horizon
+            target_ha1 = self._hour_angle(body.dec, target_alt)
+            target_ha1 = (-target_ha1) % tau  # set->rise
+            print('first target:', target_ha1)
+            ha1 = self._ha(body)
+            print('first HA:', ha1)
+            bump = (target_ha1 - ha1) / tau
+            self.date += bump
+            print(self.date)
+            body.compute(self)
+            target_ha2 = self._hour_angle(body.dec, target_alt)
+            target_ha2 = (-target_ha2) % tau  # set->rise
+            print('second target:', target_ha2)
+            ha2 = self._ha(body)
+            print('second HA:', ha2)
+            rate = (ha2 - ha1) % tau / bump #(self.date - start)
+            print(rate, 'per day')
+            bump = (target_ha2 - ha2) / rate
+            # bump = (target_ha2 - ha2) / tau
+            self.date += bump
+            print(self.date)
+            body.compute(self)
+            target_ha3 = self._hour_angle(body.dec, target_alt)
+            target_ha3 = (-target_ha3) % tau  # set->rise
+            print('third target:', target_ha3)
+            ha3 = self._ha(body)
+            print('third HA:', ha3)
+            rate = (ha3 - ha2) % tau / bump #(self.date - start)
+            print(rate, 'per day')
+            bump = (target_ha3 - ha3) / rate
+            # bump = (target_ha2 - ha2) / tau
+            self.date += bump
+            print(self.date)
+            ha = self._ha(body)
+            print('final HA:', ha)
+            return self.date
+        finally:
+            self.date = original_date
 
     @describe_riset_search
     def next_setting(self, body, start=None, use_center=False):
         """Search for the given body's next setting"""
         return self._riset_helper(body, start, use_center, False, False)
+
+    def _ha(self, body):
+        return (self.sidereal_time() - body.ra) % tau
+
+    def _hour_angle(self, dec, alt):
+        lat = self.lat
+        return acos((sin(alt) - sin(lat) * sin(dec)) / (cos(lat) * cos(dec)))
 
     def next_pass(self, body, singlepass=True):
         """Return the next rising, culmination, and setting of a satellite.
