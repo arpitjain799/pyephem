@@ -99,6 +99,11 @@ Jupiter = _libastro.Jupiter
 Saturn = _libastro.Saturn
 Moon = _libastro.Moon
 
+# Angles.
+
+def _plusminus_pi(angle):
+    return (angle - pi) % tau - pi
+
 # Newton's method.
 
 def newton(f, x0, x1, precision=default_newton_precision):
@@ -517,11 +522,11 @@ class Observer(_libastro.Observer):
     @describe_riset_search
     def next_rising(self, body, start=None, use_center=False):
         """Search for the given body's next rising"""
-        if self.pressure == 0.0 and use_center:
-            return self._replacement(body, start)
+        if self.pressure == 0.0:
+            return self._replacement(body, start, use_center)
         return self._riset_helper(body, start, use_center, True, False)
 
-    def _replacement(self, body, start):
+    def _replacement(self, body, start, use_center):
         original_date = self.date
         try:
             if start is None:
@@ -530,16 +535,26 @@ class Observer(_libastro.Observer):
                 self.date = start
             horizon = self.horizon
             prev_ha = None
-            for _ in 0, 1, 2:
+            while True:
                 body.compute(self)
+                if not use_center:
+                    horizon = self.horizon - body.radius
                 target_ha = self._hour_angle(body.dec, horizon)
                 target_ha = (-target_ha) % tau  # set->rise
                 ha = self._ha(body)
+                #P(' ', self.date, 'have', ha, 'want', target_ha)
+                difference = target_ha - ha
                 if prev_ha is None:
-                    rate = tau
+                    difference %= tau  # force movement forward in time
+                    bump = difference / tau
+                    if bump < default_newton_precision:
+                        bump += 1.0
                 else:
-                    rate = (ha - prev_ha) % tau / bump
-                bump = (target_ha - ha) / rate
+                    difference = _plusminus_pi(difference)
+                    bump = difference / tau
+                #print('  ', difference, 'bump:', bump, 'rate:', rate)
+                if abs(bump) < default_newton_precision:
+                    break
                 self.date += bump
                 prev_ha = ha
             return self.date
@@ -556,7 +571,10 @@ class Observer(_libastro.Observer):
 
     def _hour_angle(self, dec, alt):
         lat = self.lat
-        return acos((sin(alt) - sin(lat) * sin(dec)) / (cos(lat) * cos(dec)))
+        arg = (sin(alt) - sin(lat) * sin(dec)) / (cos(lat) * cos(dec))
+        if arg < -1.0:
+            arg = -1.0
+        return acos(arg)
 
     def next_pass(self, body, singlepass=True):
         """Return the next rising, culmination, and setting of a satellite.
@@ -593,6 +611,16 @@ class Observer(_libastro.Observer):
 
 
 del describe_riset_search
+
+# Print statement with auto-advancing number, to tell how far we make it
+# through tests, to tell if we make things better or worse.
+
+# N = 0
+# def P(counter, *args):
+#     global N
+#     if counter == 0:
+#         N += 1
+#     print(N, counter, *args)
 
 # Time conversion.
 
