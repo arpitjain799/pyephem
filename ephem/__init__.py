@@ -524,47 +524,24 @@ class Observer(_libastro.Observer):
     def _replacement(self, body, start):
         original_date = self.date
         try:
-            def print(*args): return
-            if start is not None:
+            if start is None:
+                start = self.date
+            else:
                 self.date = start
-            start = self.date
-            print(self.date)
-            body.compute(self)
-            target_alt = self.horizon
-            target_ha1 = self._hour_angle(body.dec, target_alt)
-            target_ha1 = (-target_ha1) % tau  # set->rise
-            print('first target:', target_ha1)
-            ha1 = self._ha(body)
-            print('first HA:', ha1)
-            bump = (target_ha1 - ha1) / tau
-            self.date += bump
-            print(self.date)
-            body.compute(self)
-            target_ha2 = self._hour_angle(body.dec, target_alt)
-            target_ha2 = (-target_ha2) % tau  # set->rise
-            print('second target:', target_ha2)
-            ha2 = self._ha(body)
-            print('second HA:', ha2)
-            rate = (ha2 - ha1) % tau / bump #(self.date - start)
-            print(rate, 'per day')
-            bump = (target_ha2 - ha2) / rate
-            # bump = (target_ha2 - ha2) / tau
-            self.date += bump
-            print(self.date)
-            body.compute(self)
-            target_ha3 = self._hour_angle(body.dec, target_alt)
-            target_ha3 = (-target_ha3) % tau  # set->rise
-            print('third target:', target_ha3)
-            ha3 = self._ha(body)
-            print('third HA:', ha3)
-            rate = (ha3 - ha2) % tau / bump #(self.date - start)
-            print(rate, 'per day')
-            bump = (target_ha3 - ha3) / rate
-            # bump = (target_ha2 - ha2) / tau
-            self.date += bump
-            print(self.date)
-            ha = self._ha(body)
-            print('final HA:', ha)
+            horizon = self.horizon
+            prev_ha = None
+            for _ in 0, 1, 2:
+                body.compute(self)
+                target_ha = self._hour_angle(body.dec, horizon)
+                target_ha = (-target_ha) % tau  # set->rise
+                ha = self._ha(body)
+                if prev_ha is None:
+                    rate = tau
+                else:
+                    rate = (ha - prev_ha) % tau / bump
+                bump = (target_ha - ha) / rate
+                self.date += bump
+                prev_ha = ha
             return self.date
         finally:
             self.date = original_date
