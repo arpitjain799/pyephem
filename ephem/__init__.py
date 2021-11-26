@@ -522,9 +522,9 @@ class Observer(_libastro.Observer):
     @describe_riset_search
     def next_rising(self, body, start=None, use_center=False):
         """Search for the given body's next rising"""
-        return self._replacement(body, start, use_center)
+        return self._replacement(body, start, use_center, True)
 
-    def _replacement(self, body, start, use_center):
+    def _replacement(self, body, start, use_center, do_rising):
         if isinstance(body, EarthSatellite):
             raise TypeError(
                 'the rising and settings methods do not'
@@ -547,7 +547,8 @@ class Observer(_libastro.Observer):
                 if original_pressure:
                     h = _libastro.unrefract(original_pressure, self.temp, h)
                 target_ha = self._hour_angle(body.dec, h)
-                target_ha = - target_ha  # set->rise
+                if do_rising:
+                    target_ha = - target_ha  # turn setting HA into rising HA
                 ha = self._ha(body)
                 #P(' ', self.date, 'have', ha, 'want', target_ha)
                 difference = target_ha - ha
@@ -575,7 +576,7 @@ class Observer(_libastro.Observer):
     @describe_riset_search
     def next_setting(self, body, start=None, use_center=False):
         """Search for the given body's next setting"""
-        return self._riset_helper(body, start, use_center, False, False)
+        return self._replacement(body, start, use_center, False)
 
     def _ha(self, body):
         return (self.sidereal_time() - body.ra) % tau
