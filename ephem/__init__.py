@@ -531,39 +531,23 @@ class Observer(_libastro.Observer):
                 ' support earth satellites because of their speed;'
                 ' please use the higher-resolution next_pass() method'
                 )
-        # if self.pressure:
-        #     base_horizon = _libastro.unrefract(
-        #         self.pressure, self.temp, self.horizon)
-        #     print('unrefracting', self.horizon, 'to', base_horizon,
-        #           base_horizon / tau * 360)
-        # else:
-        if 1:
-            base_horizon = self.horizon
-        if use_center:
-            horizon = base_horizon
-        original_date = self.date
+
         original_pressure = self.pressure
+        original_date = self.date
         try:
-            if start is None:
-                start = self.date
-            else:
+            self.pressure = 0.0  # otherwise geometry doesn't work
+            if start is not None:
                 self.date = start
-            self.pressure = 0.0
             prev_ha = None
             while True:
                 body.compute(self)
+                h = self.horizon
                 if not use_center:
-                    horizon = base_horizon - body.radius
+                    h -= body.radius
                 if original_pressure:
-                    #a = body.alt
-                    h = horizon
-                    u = _libastro.unrefract(original_pressure, self.temp, h)
-                    # du = u - h
-                    # print('a =', a+0, ' u =', u, ' du =', du / tau * 360)
-                    target_ha = self._hour_angle(body.dec, u) #horizon + du)
-                else:
-                    target_ha = self._hour_angle(body.dec, horizon)
-                target_ha = (-target_ha) % tau  # set->rise
+                    h = _libastro.unrefract(original_pressure, self.temp, h)
+                target_ha = self._hour_angle(body.dec, h)
+                target_ha = - target_ha  # set->rise
                 ha = self._ha(body)
                 #P(' ', self.date, 'have', ha, 'want', target_ha)
                 difference = target_ha - ha
@@ -571,6 +555,7 @@ class Observer(_libastro.Observer):
                     difference %= tau  # force movement forward in time
                     bump = difference / tau
                     if bump < default_newton_precision:
+                        # Already at target event: move forward to next one.
                         bump += 1.0
                 else:
                     difference = _plusminus_pi(difference)
