@@ -522,24 +522,47 @@ class Observer(_libastro.Observer):
     @describe_riset_search
     def next_rising(self, body, start=None, use_center=False):
         """Search for the given body's next rising"""
-        if self.pressure == 0.0:
-            return self._replacement(body, start, use_center)
-        return self._riset_helper(body, start, use_center, True, False)
+        return self._replacement(body, start, use_center)
 
     def _replacement(self, body, start, use_center):
+        if isinstance(body, EarthSatellite):
+            raise TypeError(
+                'the rising and settings methods do not'
+                ' support earth satellites because of their speed;'
+                ' please use the higher-resolution next_pass() method'
+                )
+        # if self.pressure:
+        #     base_horizon = _libastro.unrefract(
+        #         self.pressure, self.temp, self.horizon)
+        #     print('unrefracting', self.horizon, 'to', base_horizon,
+        #           base_horizon / tau * 360)
+        # else:
+        if 1:
+            base_horizon = self.horizon
+        if use_center:
+            horizon = base_horizon
         original_date = self.date
+        original_pressure = self.pressure
         try:
             if start is None:
                 start = self.date
             else:
                 self.date = start
-            horizon = self.horizon
+            self.pressure = 0.0
             prev_ha = None
             while True:
                 body.compute(self)
                 if not use_center:
-                    horizon = self.horizon - body.radius
-                target_ha = self._hour_angle(body.dec, horizon)
+                    horizon = base_horizon - body.radius
+                if original_pressure:
+                    #a = body.alt
+                    h = horizon
+                    u = _libastro.unrefract(original_pressure, self.temp, h)
+                    # du = u - h
+                    # print('a =', a+0, ' u =', u, ' du =', du / tau * 360)
+                    target_ha = self._hour_angle(body.dec, u) #horizon + du)
+                else:
+                    target_ha = self._hour_angle(body.dec, horizon)
                 target_ha = (-target_ha) % tau  # set->rise
                 ha = self._ha(body)
                 #P(' ', self.date, 'have', ha, 'want', target_ha)
@@ -559,6 +582,9 @@ class Observer(_libastro.Observer):
                 prev_ha = ha
             return self.date
         finally:
+            if self.pressure != original_pressure:
+                self.pressure = original_pressure
+                body.compute(self)
             self.date = original_date
 
     @describe_riset_search
